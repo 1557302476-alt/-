@@ -423,7 +423,7 @@
 
   <!-- 营养小抄 -->
   <div class="card">
-    <h2>减脂营养小抄</h2>
+    <h2>营养小抄 <span id="nutriBadge"></span></h2>
     <div id="nutri"></div>
   </div>
 
@@ -675,8 +675,8 @@ const CARDIO_MACHINES = ['跑步机','椭圆机','划船机','爬楼机','单车
 
 /* ============ 状态 ============ */
 const LS_KEY = 'training-dashboard-v2';
-let state = { logs: [], weekModes: {}, theme: null, calY: null, calM: null, periodStart: null, periodMode: 'rest', body: [], daily: {} };
-function loadState(){ try { const r = localStorage.getItem(LS_KEY); if (r){ const s = JSON.parse(r); if (s && Array.isArray(s.logs)) state = s; } } catch(e){} if(!Array.isArray(state.body)) state.body=[]; if(!state.daily || typeof state.daily!=='object') state.daily={}; if(!state.weekModes || typeof state.weekModes!=='object') state.weekModes={}; }
+let state = { logs: [], weekModes: {}, theme: null, calY: null, calM: null, periodStart: null, periodMode: 'rest', body: [], daily: {}, goal: { target: null, mode: 'auto' } };
+function loadState(){ try { const r = localStorage.getItem(LS_KEY); if (r){ const s = JSON.parse(r); if (s && Array.isArray(s.logs)) state = s; } } catch(e){} if(!Array.isArray(state.body)) state.body=[]; if(!state.daily || typeof state.daily!=='object') state.daily={}; if(!state.weekModes || typeof state.weekModes!=='object') state.weekModes={}; if(!state.goal || typeof state.goal!=='object') state.goal={ target:null, mode:'auto' }; }
 function saveState(){ try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch(e){} }
 
 /* ============ 日期工具 ============ */
@@ -1037,8 +1037,27 @@ function moveKindFor(name){
 
 /* ============ 营养小抄 ============ */
 function renderNutri(){
+  const g = state.goal || {};
+  const isMaintain = effectiveGoal()==='maintain';
+  const w = latestWeight();
+  $('nutriBadge').innerHTML = isMaintain
+    ? '<span style="padding:2px 10px;border-radius:999px;font-size:12px;background:var(--series-3);color:#fff;vertical-align:2px">维持计划</span>'
+    : '<span style="padding:2px 10px;border-radius:999px;font-size:12px;background:var(--series-2);color:#fff;vertical-align:2px">减脂计划</span>';
   $('nutri').innerHTML =
-  '<p class="hint" style="margin:0 0 12px">减脂的核心是热量缺口，训练是助攻。下面是可执行的版本。</p>'+
+  '<p class="hint" style="margin:0 0 12px">'+(isMaintain ? '已进入维持：热量吃到平衡（不再缺口），蛋白照旧，稳住体重和肌肉。' : '减脂的核心是热量缺口，训练是助攻。下面是可执行的版本。')+'</p>'+
+  '<div style="border:1px solid var(--grid);border-radius:10px;padding:12px;margin-bottom:14px">'+
+    '<div style="font-weight:650;margin-bottom:8px">🎯 目标 & 模式</div>'+
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px">'+
+      '目标体重 <input type="number" id="goalWt" step="0.1" style="width:74px" placeholder="kg" value="'+(g.target!=null?g.target:'')+'"> kg'+
+      '<select id="goalMode" style="margin-left:4px">'+
+        '<option value="auto"'+(g.mode==='auto'?' selected':'')+'>自动（到目标转维持）</option>'+
+        '<option value="cut"'+(g.mode==='cut'?' selected':'')+'>减脂</option>'+
+        '<option value="maintain"'+(g.mode==='maintain'?' selected':'')+'>维持</option>'+
+      '</select>'+
+      '<button id="goalSave" class="primary">保存</button>'+
+    '</div>'+
+    '<div id="goalStatus" class="muted" style="font-size:12px;margin-top:8px"></div>'+
+  '</div>'+
   '<table class="hist"><tr><th>要点</th><th>怎么做</th></tr>'+
   '<tr><td>热量缺口</td><td>每天少 300–500 大卡；体重每周掉 0.5%–1% 最健康（约 0.3–0.6 kg/周）。</td></tr>'+
   '<tr><td>蛋白质</td><td>每公斤体重 1.6–2.2 g，分到每餐（减脂期保肌肉的关键）。</td></tr>'+
@@ -1047,13 +1066,62 @@ function renderNutri(){
   '<tr><td>日常步数</td><td>每天 8000–10000 步，性价比最高的"额外消耗"。</td></tr>'+
   '<tr><td>睡眠</td><td>保持 7–8 小时（你已经做到了，减脂的隐藏优势）。</td></tr>'+
   '<tr><td>少喝</td><td>奶茶/含糖饮料换成无糖或水——最容易省下的空热量。</td></tr></table>'+
-  '<div style="margin-top:14px"><span class="hint" style="margin:0">按体重算目标：</span> 体重 <input type="number" id="nutriWt" step="0.1" style="width:72px" placeholder="kg"> kg <span id="nutriOut" class="muted"></span></div>'+
+  '<div style="margin-top:14px"><span class="hint" style="margin:0">按体重算目标（'+(isMaintain?'维持':'减脂')+'）：</span> 体重 <input type="number" id="nutriWt" step="0.1" style="width:72px" placeholder="kg"> kg <span id="nutriOut" class="muted"></span> <span id="nutriSync" class="muted" style="font-size:12px"></span></div>'+
   '<div style="margin-top:12px;font-size:13px;color:var(--text-secondary);line-height:1.8">'+
     '<strong>蛋白质来源</strong>：鸡胸 / 鱼虾 / 蛋 / 瘦牛肉 / 豆腐 / 希腊酸奶 / 蛋白粉。<br>'+
     '<strong>补剂（可选，非必需）</strong>：蛋白粉（补蛋白方便）、肌酸 3–5 g/天（研究最充分，助增力恢复）、咖啡因（训练前 30 分钟）。'+
   '</div>'+
   '<p class="muted" style="font-size:12px;margin-top:10px">一餐大概这样搭：一掌蛋白（鸡胸/鱼/蛋/豆腐）+ 一捧蔬菜 + 一拳主食 + 少量好油。不用精确称重，先稳定执行两周看体重趋势。</p>';
-  const wtEl=$('nutriWt'); if(wtEl){ wtEl.addEventListener('input', ()=>{ const v=parseFloat(wtEl.value); const out=$('nutriOut'); if(v>0){ const p=Math.round(v*1.8); const lo=Math.round(v*28-500); const hi=Math.round(v*30-300); out.textContent='→ 蛋白约 '+p+' g/天 · 目标热量约 '+lo+'–'+hi+' 大卡/天'; } else out.textContent=''; }); }
+  $('goalSave').addEventListener('click', saveGoal);
+  const wtEl=$('nutriWt');
+  if(wtEl){
+    wtEl.addEventListener('input', ()=>{ $('nutriSync').textContent=''; updateNutri(); });
+    if(w!=null){ wtEl.value=w.toFixed(1); $('nutriSync').textContent='已同步减脂进度最新体重（'+state.body[state.body.length-1].date.slice(5)+'）'; }
+    updateNutri();
+  }
+  renderGoalStatus();
+}
+function updateNutri(){
+  const v=parseFloat($('nutriWt').value);
+  const out=$('nutriOut');
+  const isMaintain = effectiveGoal()==='maintain';
+  if(v>0){
+    const p=Math.round(v*1.8);
+    let lo, hi;
+    if(isMaintain){ lo=Math.round(v*28); hi=Math.round(v*32); }
+    else { lo=Math.round(v*28-500); hi=Math.round(v*30-300); }
+    out.textContent='→ 蛋白约 '+p+' g/天 · '+(isMaintain?'维持热量约 ':'目标热量约 ')+lo+'–'+hi+' 大卡/天';
+  } else out.textContent='';
+}
+function latestWeight(){ const b=state.body||[]; return b.length ? b[b.length-1].weight : null; }
+function effectiveGoal(){
+  const g = state.goal || {};
+  if (g.mode === 'cut') return 'cut';
+  if (g.mode === 'maintain') return 'maintain';
+  const w = latestWeight();
+  if (g.target && w!=null && w <= g.target) return 'maintain';
+  return 'cut';
+}
+function renderGoalStatus(){
+  const g = state.goal || {};
+  const el = $('goalStatus'); if (!el) return;
+  const w = latestWeight();
+  let html = '';
+  if (g.mode === 'cut') html = '当前手动锁定：<strong>减脂</strong>计划。';
+  else if (g.mode === 'maintain') html = '当前手动锁定：<strong>维持</strong>计划。';
+  else if (g.target){
+    if (w!=null){
+      if (w <= g.target) html = '🎉 已到目标体重（≤ '+g.target+' kg），自动进入维持计划。';
+      else html = '自动：当前 '+w.toFixed(1)+' kg，还差 '+((w-g.target).toFixed(1))+' kg 到目标 '+g.target+' kg，达标后自动转维持。';
+    } else html = '自动：目标 '+g.target+' kg——在减脂进度记体重后，达标即自动转维持。';
+  } else html = '自动：未设目标体重，默认减脂。设一个目标后，达标即自动转维持。';
+  el.innerHTML = html;
+}
+function saveGoal(){
+  const t = parseFloat($('goalWt').value);
+  const m = $('goalMode').value;
+  state.goal = { target: (t>0 ? t : null), mode: m };
+  saveState(); renderNutri();
 }
 
 /* ============ 减脂进度 ============ */
@@ -1078,7 +1146,7 @@ function saveBody(){
   const i=state.body.findIndex(r=>r.date===date); if(i>=0) state.body[i]=rec; else state.body.push(rec);
   state.body.sort((a,b)=>a.date.localeCompare(b.date)); saveState();
   $('bWt').value=''; $('bWaist').value=''; $('bHip').value='';
-  renderBody();
+  renderBody(); renderNutri();
 }
 function bodyChart(wrap, b){
   const W=Math.max(wrap.clientWidth,280), H=260, mt=16, mr=20, mb=30, ml=46, iw=W-ml-mr, ih=H-mt-mb;
